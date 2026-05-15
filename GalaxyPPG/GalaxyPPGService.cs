@@ -1,14 +1,18 @@
-﻿using System;
-using System.ServiceModel;
+﻿using GalaxyPPG.Faults;
+using GalaxyPPG.IO;
 using GalaxyPPG.Models;
-using GalaxyPPG.Faults;
+using System;
+using System.ServiceModel;
+
 
 namespace GalaxyPPG
 {
     public class GalaxyPPGService : IGalaxyPPGService
     {
+        private ServerSessionWriter writer;
         public void StartSession(SessionMeta meta)
         {
+            
             if (meta == null)
             {
                 throw new FaultException<DataFormatFault>(
@@ -25,19 +29,35 @@ namespace GalaxyPPG
             Console.WriteLine("Session started.");
             Console.WriteLine("Participant: " + meta.ParticipantId);
             Console.WriteLine("Device: " + meta.DeviceId);
+            writer = new ServerSessionWriter();
+            writer.Start(meta);
         }
 
         public void PushSample(PpgSample sample)
         {
+            if (writer == null)
+            {
+                throw new FaultException<DataFormatFault>(
+                    new DataFormatFault { Message = "Sesija nije pokrenuta. Prvo pozvati StartSession." });
+            }
+
             ValidateSample(sample);
+            writer.WriteSample(sample);
 
             Console.WriteLine("Sample received: " + sample.RowIndex);
         }
 
         public void EndSession()
         {
+            if (writer != null)
+            {
+                writer.Dispose();
+                writer = null;
+            }
+
             Console.WriteLine("Session ended.");
         }
+        
 
         private void ValidateSample(PpgSample sample)
         {

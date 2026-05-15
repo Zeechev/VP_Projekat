@@ -48,13 +48,13 @@
     <Compile Include="Faults\ValidationFault.cs" />
     <Compile Include="GalaxyPPGService.cs" />
     <Compile Include="IGalaxyPPGService.cs" />
+    <Compile Include="IO\ServerSessionWriter.cs.cs" />
     <Compile Include="Models\PpgSample.cs" />
     <Compile Include="Models\SessionMeta.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Events\" />
-    <Folder Include="IO\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
