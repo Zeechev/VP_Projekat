@@ -1,6 +1,5 @@
-# GalaxyPPG
+# VP Projekat
 
-<<<<<<< HEAD
 ## Opis projekta
 
 Projekat implementira WCF sistem za razmenu i obradu PPG/HRV podataka sa nosivih uređaja.
@@ -12,12 +11,5 @@ Servis validira podatke, čuva ih na disku i vrši obradu i analizu podataka.
 ---
 
 ## Arhitektura sistema
-![GalaxyPPG Arhitektura](arhitektura.drawio.png)
-=======
-## Opis
-Projekat implementira WCF sistem za razmenu i obradu PPG/HRV podataka sa nosivih uređaja.
-Klijent učitava PPG.csv, HR.csv i ACC.csv podatke iz GalaxyPPG dataset-a i šalje ih WCF servisu korišćenjem netTcpBinding komunikacije.
-Servis validira podatke, čuva ih na disku i vrši obradu i analizu podataka.
 
-## Arhitektura projekta
->>>>>>> 2445d93a17ca33d32182e30209afa976ff24c3b6
+![GalaxyPPG Arhitektura](arhitektura.drawio.png)
