@@ -1,0 +1,11 @@
+.vs/
+bin/
+obj/
+Debug/
+Release/
+*.user
+*.suo
+*.log
+rejected_client.csv
+Data/
+Dataset/
