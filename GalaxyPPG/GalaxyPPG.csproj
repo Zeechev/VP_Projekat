@@ -44,6 +44,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Events\SampleReceivedEventArgs.cs" />
+    <Compile Include="Events\TransferEventArgs.cs" />
+    <Compile Include="Events\WarningEventArgs.cs" />
     <Compile Include="Faults\DataFormatFault.cs" />
     <Compile Include="Faults\ValidationFault.cs" />
     <Compile Include="GalaxyPPGService.cs" />
@@ -53,8 +56,6 @@
     <Compile Include="Models\SessionMeta.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Events\" />
-  </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

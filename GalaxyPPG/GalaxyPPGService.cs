@@ -3,6 +3,8 @@ using GalaxyPPG.IO;
 using GalaxyPPG.Models;
 using System;
 using System.ServiceModel;
+using GalaxyPPG.Events;
+using System.Configuration;
 
 
 namespace GalaxyPPG
@@ -10,6 +12,12 @@ namespace GalaxyPPG
     public class GalaxyPPGService : IGalaxyPPGService
     {
         private ServerSessionWriter writer;
+        private int brojPrimljenihUzoraka;
+
+        public event EventHandler<TransferEventArgs> OnTransferStarted;
+        public event EventHandler<SampleReceivedEventArgs> OnSampleReceived;
+        public event EventHandler<TransferEventArgs> OnTransferCompleted;
+        public event EventHandler<WarningEventArgs> OnWarningRaised;
         public void StartSession(SessionMeta meta)
         {
             
@@ -31,6 +39,17 @@ namespace GalaxyPPG
             Console.WriteLine("Device: " + meta.DeviceId);
             writer = new ServerSessionWriter();
             writer.Start(meta);
+            brojPrimljenihUzoraka = 0;
+
+            Console.WriteLine("Prenos u toku...");
+
+            OnTransferStarted?.Invoke(this, new TransferEventArgs
+            {
+                ParticipantId = meta.ParticipantId,
+                DeviceId = meta.DeviceId,
+                SampleCount = 0,
+                Message = "Prenos je pokrenut."
+            });
         }
 
         public void PushSample(PpgSample sample)
@@ -43,8 +62,14 @@ namespace GalaxyPPG
 
             ValidateSample(sample);
             writer.WriteSample(sample);
+            brojPrimljenihUzoraka++;
+            OnSampleReceived?.Invoke(this, new SampleReceivedEventArgs
+            {
+                Sample = sample
+            });
 
-            Console.WriteLine("Sample received: " + sample.RowIndex);
+            Console.WriteLine("Primljen uzorak broj: " + brojPrimljenihUzoraka);
+
         }
 
         public void EndSession()
@@ -55,9 +80,19 @@ namespace GalaxyPPG
                 writer = null;
             }
 
+            Console.WriteLine("Prenos zavrsen.");
+            Console.WriteLine("Ukupno primljenih uzoraka: " + brojPrimljenihUzoraka);
+            OnTransferCompleted?.Invoke(this, new TransferEventArgs
+            {
+                SampleCount = brojPrimljenihUzoraka,
+                Message = "Prenos je zavrsen."
+            });
+
             Console.WriteLine("Session ended.");
         }
-        
+
+
+
 
         private void ValidateSample(PpgSample sample)
         {
@@ -99,5 +134,20 @@ namespace GalaxyPPG
                     new ValidationFault { Message = "IBI_ms mora biti u opsegu [250, 2000] ms." });
             }
         }
+        private void RaiseWarning(string type, PpgSample sample, double? value, string message)
+        {
+            OnWarningRaised?.Invoke(this, new WarningEventArgs
+            {
+                WarningType = type,
+                ParticipantId = sample.ParticipantId,
+                TimestampMs = sample.TimestampMs,
+                Value = value,
+                Message = message
+            });
+
+            Console.WriteLine("WARNING: " + type + " | " + message);
+        }
+
+
     }
 }
