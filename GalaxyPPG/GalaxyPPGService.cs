@@ -14,6 +14,10 @@ namespace GalaxyPPG
         private ServerSessionWriter writer;
         private int brojPrimljenihUzoraka;
 
+        private double? prethodniIbi; //9
+
+        private int weakPpgCounter; //10
+
         public event EventHandler<TransferEventArgs> OnTransferStarted;
         public event EventHandler<SampleReceivedEventArgs> OnSampleReceived;
         public event EventHandler<TransferEventArgs> OnTransferCompleted;
@@ -41,6 +45,10 @@ namespace GalaxyPPG
             writer.Start(meta);
             brojPrimljenihUzoraka = 0;
 
+            prethodniIbi = null;
+
+            weakPpgCounter = 0;
+
             Console.WriteLine("Prenos u toku...");
 
             OnTransferStarted?.Invoke(this, new TransferEventArgs
@@ -62,7 +70,13 @@ namespace GalaxyPPG
 
             ValidateSample(sample);
             writer.WriteSample(sample);
+            AnalyzeHeartRateAndIbi(sample);
+
+            AnalyzeMotionAndPpg(sample);
+
             brojPrimljenihUzoraka++;
+
+
             OnSampleReceived?.Invoke(this, new SampleReceivedEventArgs
             {
                 Sample = sample
@@ -132,6 +146,115 @@ namespace GalaxyPPG
             {
                 throw new FaultException<ValidationFault>(
                     new ValidationFault { Message = "IBI_ms mora biti u opsegu [250, 2000] ms." });
+            }
+        }
+
+        private void AnalyzeHeartRateAndIbi(PpgSample sample)
+        {
+            double hrMin = double.Parse(ConfigurationManager.AppSettings["HrMinBpm"]);
+            double hrMax = double.Parse(ConfigurationManager.AppSettings["HrMaxBpm"]);
+
+            double ibiPct = double.Parse(
+                ConfigurationManager.AppSettings["IbiOutOfRangePct"],
+                System.Globalization.CultureInfo.InvariantCulture);
+
+            if (sample.HeartRate.HasValue)
+            {
+                if (sample.HeartRate.Value < hrMin ||
+                    sample.HeartRate.Value > hrMax)
+                {
+                    RaiseWarning(
+                        "HrOutOfRangeWarning",
+                        sample,
+                        sample.HeartRate.Value,
+                        "HeartRate je van dozvoljenog opsega."
+                    );
+                }
+            }
+
+            if (sample.IBI_ms.HasValue)
+            {
+                if (prethodniIbi.HasValue)
+                {
+                    double razlika = Math.Abs(sample.IBI_ms.Value - prethodniIbi.Value);
+
+                    if (razlika > ibiPct * prethodniIbi.Value)
+                    {
+                        RaiseWarning(
+                            "IbiSpikeWarning",
+                            sample,
+                            sample.IBI_ms.Value,
+                            "Detektovan IBI diskontinuitet."
+                        );
+                    }
+                }
+
+                prethodniIbi = sample.IBI_ms.Value;
+            }
+        }
+
+        private void AnalyzeMotionAndPpg(PpgSample sample)
+        {
+            double accMotionThreshold = double.Parse(
+                ConfigurationManager.AppSettings["AccMotionThreshold"],
+                System.Globalization.CultureInfo.InvariantCulture);
+
+            double ppgMinSignalThreshold = double.Parse(
+                ConfigurationManager.AppSettings["PpgMinSignalThreshold"],
+                System.Globalization.CultureInfo.InvariantCulture);
+
+            int weakPpgConsecutiveRows = int.Parse(
+                ConfigurationManager.AppSettings["WeakPpgConsecutiveRows"]);
+
+            if (sample.AccX.HasValue &&
+                sample.AccY.HasValue &&
+                sample.AccZ.HasValue)
+            {
+                double aNorm = Math.Sqrt(
+                    sample.AccX.Value * sample.AccX.Value +
+                    sample.AccY.Value * sample.AccY.Value +
+                    sample.AccZ.Value * sample.AccZ.Value);
+
+                if (aNorm > accMotionThreshold)
+                {
+                    RaiseWarning(
+                        "ExcessiveMotionWarning",
+                        sample,
+                        aNorm,
+                        "Detektovan prekomeran pokret."
+                    );
+                }
+            }
+
+            if (sample.PpgGreen.HasValue &&
+                sample.PpgRed.HasValue &&
+                sample.PpgIr.HasValue)
+            {
+                bool weakPpg =
+                    sample.PpgGreen.Value < ppgMinSignalThreshold &&
+                    sample.PpgRed.Value < ppgMinSignalThreshold &&
+                    sample.PpgIr.Value < ppgMinSignalThreshold;
+
+                if (weakPpg)
+                {
+                    weakPpgCounter++;
+                }
+                else
+                {
+                    weakPpgCounter = 0;
+                }
+
+                if (weakPpgCounter >= weakPpgConsecutiveRows)
+                {
+                    RaiseWarning(
+                        "WeakPpgWarning",
+                        sample,
+                        null,
+                        "Slab PPG signal u vise uzastopnih redova."
+                    );
+
+                    weakPpgCounter = 0;
+                }
             }
         }
         private void RaiseWarning(string type, PpgSample sample, double? value, string message)
