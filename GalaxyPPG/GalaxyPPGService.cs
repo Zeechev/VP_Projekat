@@ -9,6 +9,7 @@ using System.Configuration;
 
 namespace GalaxyPPG
 {
+    [ServiceBehavior(InstanceContextMode = InstanceContextMode.Single)]
     public class GalaxyPPGService : IGalaxyPPGService
     {
         private ServerSessionWriter writer;
@@ -68,7 +69,21 @@ namespace GalaxyPPG
                     new DataFormatFault { Message = "Sesija nije pokrenuta. Prvo pozvati StartSession." });
             }
 
-            ValidateSample(sample);
+            try
+            {
+                ValidateSample(sample);
+            }
+            catch (FaultException<ValidationFault> ex)
+            {
+                writer.WriteReject(ex.Detail.Message, "RowIndex=" + sample.RowIndex);
+                throw;
+            }
+            catch (FaultException<DataFormatFault> ex)
+            {
+                writer.WriteReject(ex.Detail.Message, "RowIndex=" + sample.RowIndex);
+                throw;
+            }
+
             writer.WriteSample(sample);
             AnalyzeHeartRateAndIbi(sample);
 
@@ -82,7 +97,11 @@ namespace GalaxyPPG
                 Sample = sample
             });
 
-            Console.WriteLine("Primljen uzorak broj: " + brojPrimljenihUzoraka);
+            if (brojPrimljenihUzoraka % 100 == 0)
+            {
+                Console.WriteLine(
+                    "Primljeno uzoraka: " + brojPrimljenihUzoraka);
+            }
 
         }
 
@@ -116,12 +135,14 @@ namespace GalaxyPPG
                     new DataFormatFault { Message = "Sample ne sme biti null." });
             }
 
-            if (sample.HeartRate.HasValue &&
-                (sample.HeartRate.Value < 30 || sample.HeartRate.Value > 220))
-            {
-                throw new FaultException<ValidationFault>(
-                    new ValidationFault { Message = "HeartRate mora biti u opsegu [30, 220] bpm." });
-            }
+            // HR van opsega se ne odbacuje ovde,
+            // vec se obradjuje kao HrOutOfRangeWarning u analitici.
+            /* if (sample.HeartRate.HasValue &&
+                 (sample.HeartRate.Value < 30 || sample.HeartRate.Value > 220))
+             {
+                 throw new FaultException<ValidationFault>(
+                     new ValidationFault { Message = "HeartRate mora biti u opsegu [30, 220] bpm." });
+             }*/
 
             if (sample.PpgGreen.HasValue && sample.PpgGreen.Value < 0)
             {

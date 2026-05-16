@@ -51,7 +51,7 @@
     <Compile Include="Faults\ValidationFault.cs" />
     <Compile Include="GalaxyPPGService.cs" />
     <Compile Include="IGalaxyPPGService.cs" />
-    <Compile Include="IO\ServerSessionWriter.cs.cs" />
+    <Compile Include="IO\ServerSessionWriter.cs" />
     <Compile Include="Models\PpgSample.cs" />
     <Compile Include="Models\SessionMeta.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

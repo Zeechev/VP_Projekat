@@ -8,174 +8,146 @@ namespace GalaxyPPG.Client.IO
 {
     public class CsvGalaxyReader : IDisposable
     {
-        private StreamWriter logWriter;
         private bool disposed;
 
-        public CsvGalaxyReader()
+        public IEnumerable<PpgSample> ReadParticipant(
+            string participantPath,
+            string participantId)
         {
-            string logPath = Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory,
-                "rejected_client.csv"
-            );
-
-            logWriter = new StreamWriter(logPath, true);
-        }
-
-        public IEnumerable<PpgSample> ReadParticipant(string participantDirectory, string participantId)
-        {
-            ThrowIfDisposed();
-
-            if (!Directory.Exists(participantDirectory))
+            if (!Directory.Exists(participantPath))
             {
-                throw new DirectoryNotFoundException("Direktorijum ucesnika nije pronadjen: " + participantDirectory);
+                throw new DirectoryNotFoundException(
+                    "Direktorijum ucesnika nije pronadjen: " + participantPath);
             }
 
-            string[] files = Directory.GetFiles(
-                participantDirectory,
-                "PPG.csv",
-                SearchOption.AllDirectories
-            );
+            string galaxyWatchPath =
+                Path.Combine(participantPath, "GalaxyWatch");
 
-            foreach (string file in files)
+            if (!Directory.Exists(galaxyWatchPath))
             {
-                foreach (PpgSample sample in ReadPpgFile(file, participantId))
+                throw new DirectoryNotFoundException(
+                    "GalaxyWatch folder nije pronadjen.");
+            }
+
+            string ppgPath = Path.Combine(galaxyWatchPath, "PPG.csv");
+            string hrPath = Path.Combine(galaxyWatchPath, "HR.csv");
+            string accPath = Path.Combine(galaxyWatchPath, "ACC.csv");
+
+            List<string[]> ppgRows = ReadCsvRows(ppgPath);
+            List<string[]> hrRows = ReadCsvRows(hrPath);
+            List<string[]> accRows = ReadCsvRows(accPath);
+
+            int count = Math.Min(
+                ppgRows.Count,
+                Math.Min(hrRows.Count, accRows.Count));
+
+            for (int i = 0; i < count; i++)
+            {
+                string[] ppg = ppgRows[i];
+                string[] hr = hrRows[i];
+                string[] acc = accRows[i];
+
+                PpgSample sample = new PpgSample();
+
+                sample.ParticipantId = participantId;
+                sample.RowIndex = i + 1;
+
+                sample.TimestampMs = ParseLong(ppg, 1);
+
+                double? ppgValue = ParseNullableDouble(ppg, 2);
+
+                if (ppgValue.HasValue && ppgValue.Value < 0)
                 {
-                    yield return sample;
+                    ppgValue = Math.Abs(ppgValue.Value);
                 }
+
+                sample.PpgGreen = ppgValue;
+                sample.PpgRed = ppgValue;
+                sample.PpgIr = ppgValue;
+
+                sample.HeartRate = ParseNullableDouble(hr, 2);
+                sample.IBI_ms = ParseNullableDouble(hr, 4);
+
+                sample.AccX = ParseNullableDouble(acc, 2);
+                sample.AccY = ParseNullableDouble(acc, 3);
+                sample.AccZ = ParseNullableDouble(acc, 4);
+
+                yield return sample;
             }
         }
 
-        private IEnumerable<PpgSample> ReadPpgFile(string filePath, string participantId)
+        private List<string[]> ReadCsvRows(string path)
         {
-            int rowIndex = 0;
-            int lineNumber = 0;
-
-            using (StreamReader reader = new StreamReader(filePath))
+            List<string[]> rows = new List<string[]>();
+            if (!File.Exists(path))
             {
-                string line;
+                WriteClientReject("Fajl ne postoji", path);
+                return rows;
+            }
 
-                while ((line = reader.ReadLine()) != null)
+            string[] lines = File.ReadAllLines(path);
+
+            for (int i = 1; i < lines.Length; i++)
+            {
+                if (string.IsNullOrWhiteSpace(lines[i]))
                 {
-                    lineNumber++;
-
-                    if (lineNumber == 1)
-                    {
-                        continue;
-                    }
-
-                    if (string.IsNullOrWhiteSpace(line))
-                    {
-                        continue;
-                    }
-
-                    rowIndex++;
-
-                    PpgSample sample;
-
-                    try
-                    {
-                        sample = ParseLine(line, participantId, rowIndex);
-                    }
-                    catch (Exception ex)
-                    {
-                        LogInvalidLine(filePath, lineNumber, line, ex.Message);
-                        continue;
-                    }
-
-                    yield return sample;
+                    continue;
                 }
-            }
-        }
 
-        private PpgSample ParseLine(string line, string participantId, int rowIndex)
-        {
-            string[] parts = line.Split(',');
-
-            if (parts.Length < 11)
-            {
-                throw new FormatException("Red nema dovoljan broj kolona. Ocekivano je najmanje 11.");
+                rows.Add(lines[i].Split(','));
             }
 
-            return new PpgSample
-            {
-                TimestampMs = long.Parse(parts[0], CultureInfo.InvariantCulture),
-
-                PpgGreen = ParseNullableDouble(parts[1]),
-                PpgRed = ParseNullableDouble(parts[2]),
-                PpgIr = ParseNullableDouble(parts[3]),
-
-                AccX = ParseNullableDouble(parts[4]),
-                AccY = ParseNullableDouble(parts[5]),
-                AccZ = ParseNullableDouble(parts[6]),
-
-                HeartRate = ParseNullableDouble(parts[7]),
-                IBI_ms = ParseNullableDouble(parts[8]),
-
-                ParticipantId = participantId,
-                RowIndex = rowIndex
-            };
+            return rows;
         }
 
-        private double? ParseNullableDouble(string value)
+        private long ParseLong(string[] values, int index)
         {
-            if (string.IsNullOrWhiteSpace(value))
+            if (index >= values.Length)
+            {
+                return 0;
+            }
+
+            long result;
+
+            if (long.TryParse(values[index], out result))
+            {
+                return result;
+            }
+
+            return 0;
+        }
+
+        private double? ParseNullableDouble(string[] values, int index)
+        {
+            if (index >= values.Length)
             {
                 return null;
             }
 
-            value = value.Trim();
+            double result;
 
-            if (value.Equals("NaN", StringComparison.OrdinalIgnoreCase))
+            if (double.TryParse(
+                values[index],
+                NumberStyles.Any,
+                CultureInfo.InvariantCulture,
+                out result))
             {
-                return null;
+                return result;
             }
 
-            return double.Parse(value, CultureInfo.InvariantCulture);
+            return null;
         }
-
-        private void LogInvalidLine(string filePath, int lineNumber, string line, string reason)
+        private void WriteClientReject(string reason, string originalLine)
         {
-            Console.WriteLine("Nevalidan red " + lineNumber + ": " + reason);
-
-            if (logWriter != null)
-            {
-                logWriter.WriteLine(filePath + " | red " + lineNumber + " | " + reason + " | " + line);
-                logWriter.Flush();
-            }
-        }
-
-        private void ThrowIfDisposed()
-        {
-            if (disposed)
-            {
-                throw new ObjectDisposedException("CsvGalaxyReader");
-            }
-        }
-
-        ~CsvGalaxyReader()
-        {
-            Dispose(false);
+            File.AppendAllText(
+                "rejected_client.csv",
+                reason + "," + originalLine + Environment.NewLine);
         }
 
         public void Dispose()
         {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
-
-        protected virtual void Dispose(bool disposing)
-        {
             if (!disposed)
             {
-                if (disposing)
-                {
-                    if (logWriter != null)
-                    {
-                        logWriter.Dispose();
-                        logWriter = null;
-                    }
-                }
-
                 disposed = true;
             }
         }

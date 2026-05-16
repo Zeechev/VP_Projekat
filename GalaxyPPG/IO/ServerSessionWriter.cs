@@ -28,6 +28,9 @@ namespace GalaxyPPG.IO
             string sessionPath = Path.Combine(folderPath, "session.csv");
             string rejectsPath = Path.Combine(folderPath, "rejects.csv");
 
+            bool sessionFileExists = File.Exists(sessionPath);
+            bool rejectsFileExists = File.Exists(rejectsPath);
+
             sessionWriter = new StreamWriter(
                 new FileStream(sessionPath, FileMode.Append, FileAccess.Write)
             );
@@ -36,11 +39,17 @@ namespace GalaxyPPG.IO
                 new FileStream(rejectsPath, FileMode.Append, FileAccess.Write)
             );
 
-            sessionWriter.WriteLine("TimestampMs,PpgGreen,PpgRed,PpgIr,AccX,AccY,AccZ,HeartRate,IBI_ms,ParticipantId,RowIndex");
-            sessionWriter.Flush();
+            if (!sessionFileExists)
+            {
+                sessionWriter.WriteLine("TimestampMs,PpgGreen,PpgRed,PpgIr,AccX,AccY,AccZ,HeartRate,IBI_ms,ParticipantId,RowIndex");
+                sessionWriter.Flush();
+            }
 
-            rejectsWriter.WriteLine("Reason,OriginalLine");
-            rejectsWriter.Flush();
+            if (!rejectsFileExists)
+            {
+                rejectsWriter.WriteLine("Reason,OriginalLine");
+                rejectsWriter.Flush();
+            }
         }
 
         public void WriteSample(PpgSample sample)
